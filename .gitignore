@@ -58,6 +58,8 @@ Session.vim
 # temporary
 .netrwhist
 *~
+cscope.files
+tags
 
 
 ### JetBrains ###
