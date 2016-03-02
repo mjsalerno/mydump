@@ -1,4 +1,4 @@
-#ifdef MY_DUMP_H
+#ifndef MY_DUMP_H
 #define MY_DUMP_H
 
 #include <arpa/inet.h>
@@ -9,6 +9,8 @@
 #include <pcap.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <stdio.h>
 #include <unistd.h>
 
 #endif

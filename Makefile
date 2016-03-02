@@ -3,7 +3,7 @@ CFLAGS = -g -Wall -Werror
 LIBS = -lpcap
 BIN = mydump
 
-.PHONY: clean all
+.PHONY: clean all tags
 
 all: mydump
 
