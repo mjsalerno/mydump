@@ -31,6 +31,7 @@
 *.i*86
 *.x86_64
 *.hex
+mydump
 
 # Debug files
 *.dSYM/
@@ -60,7 +61,8 @@ Session.vim
 *~
 cscope.files
 tags
-
+*.py
+*.pyc
 
 ### JetBrains ###
 # Covers JetBrains IDEs: IntelliJ, RubyMine, PhpStorm, AppCode, PyCharm, CLion, Android Studio and Webstorm
