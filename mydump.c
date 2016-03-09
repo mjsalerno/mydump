@@ -7,14 +7,22 @@ int main(int argc, char * argv[]) {
     char *ival = NULL;
     char *rval = NULL;
     char *sval = NULL;
+    char *bpf = NULL;
     char errbuf[PCAP_ERRBUF_SIZE];
     int index;
     int c;
     int rtn;
+    bpf_u_int32 mask;
+    bpf_u_int32 net;
+    struct bpf_program fp;
 
     opterr = 0;
     while ((c = getopt (argc, argv, "i:r:s:")) != -1) {
         switch (c) {
+            case 'h':
+                print_help(stdout);
+                exit(EXIT_SUCCESS);
+                break;
             case 'i':
                 ival = optarg;
                 break;
@@ -43,7 +51,12 @@ int main(int argc, char * argv[]) {
 
     printf ("i = %s, r = %s, s = %s\n", ival, rval, sval);
     for (index = optind; index < argc; index++) {
-        printf ("Non-option argument %s\n", argv[index]);
+        bpf = argv[index];
+        if(index > optind) {
+            fprintf(stderr, "Please put BPF in quotes\n");
+            exit(EXIT_FAILURE);
+        }
+        //printf ("Non-option argument %s\n", argv[index]);
     }
 
     if(ival == NULL) {
@@ -57,6 +70,12 @@ int main(int argc, char * argv[]) {
 
     }
 
+    if (pcap_lookupnet(ival, &net, &mask, errbuf) == -1) {
+        fprintf(stderr, "Couldn't get netmask for device %s: %s\n", ival, errbuf);
+        net = 0;
+        mask = 0;
+    }
+
     handle = pcap_open_live(ival, BUFSIZ, 1, 1000, errbuf);
 
     if (handle == NULL) {
@@ -64,12 +83,27 @@ int main(int argc, char * argv[]) {
         return(2);
     }
 
+    if(bpf != NULL) {
+        if (pcap_compile(handle, &fp, bpf, 0, net) == -1) {
+            fprintf(stderr, "Couldn't parse filter %s: %s\n", bpf, pcap_geterr(handle));
+            return(2);
+        }
+
+        if (pcap_setfilter(handle, &fp) == -1) {
+            fprintf(stderr, "Couldn't install filter %s: %s\n", bpf, pcap_geterr(handle));
+            return(2);
+        }
+    }
+
     signal(SIGINT, int_handler);
     rtn = pcap_loop(handle, -1, got_packet, NULL);
-    printf("loop rtn: %d\n", rtn);
+    if(rtn == -1) {
+        fprintf(stderr, "%s\n", pcap_geterr(handle));
+        return EXIT_FAILURE;
+    }
 
     pcap_close(handle);
-    return 0;
+    return EXIT_SUCCESS;
 }
 
 void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *packet) {
