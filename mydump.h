@@ -12,5 +12,10 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <signal.h>
+
+void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *packet);
+void print_help(FILE *fd);
+void int_handler(int sig);
 
 #endif
