@@ -1,4 +1,5 @@
 #include "mydump.h"
+#include <netinet/if_ether.h>
 
 pcap_t *handle = NULL;
 
@@ -107,14 +108,141 @@ int main(int argc, char * argv[]) {
 }
 
 void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *packet) {
-    printf("Packet len: %d\n", header->len);
-    printf("packet: %s\n", packet);
+    struct ether_header *eth_hdr;
+    struct iphdr *ip_hdr;
+    struct tcphdr *tcp_hdr;
+    struct udphdr *udp_hdr;
+
+    eth_hdr = (struct ether_header *) packet;
+    uint32_t eth_type = ntohs(eth_hdr->ether_type);
+
+    if(eth_type != ETHERTYPE_IP) {
+        return;
+    }
+    
+    print_time(header->ts);
+
+    printf("%02X:%02X:%02X:%02X:%02X:%02X",
+        (unsigned char) eth_hdr->ether_shost[0],
+        (unsigned char) eth_hdr->ether_shost[1],
+        (unsigned char) eth_hdr->ether_shost[2],
+        (unsigned char) eth_hdr->ether_shost[3],
+        (unsigned char) eth_hdr->ether_shost[4],
+        (unsigned char) eth_hdr->ether_shost[5]);
+    printf(" -> %02X:%02X:%02X:%02X:%02X:%02X type 0x%04X len %d\n",
+        (unsigned char) eth_hdr->ether_dhost[0],
+        (unsigned char) eth_hdr->ether_dhost[1],
+        (unsigned char) eth_hdr->ether_dhost[2],
+        (unsigned char) eth_hdr->ether_dhost[3],
+        (unsigned char) eth_hdr->ether_dhost[4],
+        (unsigned char) eth_hdr->ether_dhost[5],
+        eth_type,
+        header->len);
+
+    /* Print IP stuff */
+    char *ip_src = malloc(sizeof(char) * BUFF_SIZE);
+    char *ip_dst = malloc(sizeof(char) * BUFF_SIZE);
+    char *type_name = malloc(sizeof(char) * BUFF_SIZE);
+    char *tmp_src = NULL;
+    char *tmp_dst = NULL;
+    ip_hdr = (struct iphdr*)(eth_hdr + 1);
+    u_char *data = NULL;
+
+    memset(ip_src, 0, BUFF_SIZE);
+    memset(ip_dst, 0, BUFF_SIZE);
+    memset(type_name, 0, BUFF_SIZE);
+
+    tmp_src = inet_ntoa(*(struct in_addr*)&ip_hdr->saddr);
+    strncpy(ip_src, tmp_src, 15);
+    tmp_src = ip_src + strlen(ip_src);
+
+    tmp_dst = inet_ntoa(*(struct in_addr*)&ip_hdr->daddr);
+    strncpy(ip_dst, tmp_dst, 15);
+    tmp_dst = ip_dst + strlen(ip_dst);
+
+   /*TODO: read file and time and data*/ 
+
+    switch(ip_hdr->protocol) {
+        case IPPROTO_TCP:
+            tcp_hdr = (struct tcphdr*) (ip_hdr + 1);
+            sprintf(tmp_src, ":%hu", ntohs(tcp_hdr->source));
+            sprintf(tmp_dst, ":%hu", ntohs(tcp_hdr->dest));
+            sprintf(type_name, "%s", "TCP");
+            data = (u_char *)((unsigned char *)tcp_hdr + (tcp_hdr->doff * 4));
+            break;
+
+        case IPPROTO_UDP:
+            udp_hdr = (struct udphdr*) (ip_hdr + 1);
+            sprintf(tmp_src, ":%hu", ntohs(udp_hdr->source));
+            sprintf(tmp_dst, ":%hu", ntohs(udp_hdr->dest));
+            sprintf(type_name, "%s", "UDP");
+            data = (u_char *) (udp_hdr + 1);
+            break;
+
+        case IPPROTO_ICMP:
+            sprintf(type_name, "%s", "ICMP");
+            data = (u_char *) (ip_hdr + 1);
+            break;
+
+        default:
+            sprintf(type_name, "%s", "OTHER");
+            data = (u_char *) (ip_hdr + 1);
+            break;
+    }
+
+    printf("%s -> %s %s\n", ip_src, ip_dst, type_name);
+
+    while(1) {
+        if(data >= (packet + header->caplen)) break;
+
+        memset(ip_src, 0, BUFF_SIZE);
+        memset(ip_dst, 0, BUFF_SIZE);
+        tmp_src = ip_src;
+        tmp_dst = ip_dst;
+        int i = 0;
+        int j = 0;
+
+        for(i = 0, j = 0; i < 48 && data < (packet + header->caplen); i = i + 3, j++, data++) {
+            sprintf(ip_src + i, " %02X", (*data));
+            if(isprint(*data)) {
+                sprintf(ip_dst + j, "%c", *data);
+            } else {
+                sprintf(ip_dst + j, ".");
+            }
+        }
+
+        printf("%s  %s\n", ip_src + 1, ip_dst);
+
+    }
+    printf("\n\n");
+
+
+    free(ip_dst);
+    free(ip_src);
+    free(type_name);
 
 }
 
 void int_handler(int sig) {
     if(handle != NULL)
         pcap_breakloop(handle);
+}
+
+void print_time (struct timeval tv) {
+    struct tm* ptm;
+    char time_string[40];
+    long milliseconds;
+
+    /* Obtain the time of day, and convert it to a tm struct. */
+    gettimeofday (&tv, NULL);
+    ptm = localtime (&tv.tv_sec);
+    /* Format the date and time, down to a single second. */
+    strftime (time_string, sizeof (time_string), "%Y-%m-%d %H:%M:%S", ptm);
+    /* Compute milliseconds from microseconds. */
+    milliseconds = tv.tv_usec / 1000;
+    /* Print the formatted time, in seconds, followed by a decimal point
+     *    and the milliseconds. */
+    printf ("%s.%03ld ", time_string, milliseconds);
 }
 
 void print_help(FILE *fd) {
