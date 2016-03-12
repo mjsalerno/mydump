@@ -13,9 +13,10 @@ int main(int argc, char * argv[]) {
     int index;
     int c;
     int rtn;
-    bpf_u_int32 mask;
-    bpf_u_int32 net;
+    bpf_u_int32 mask = 0;
+    bpf_u_int32 net = 0;
     struct bpf_program fp;
+    FILE *pcap_file = NULL;
 
     opterr = 0;
     while ((c = getopt (argc, argv, "i:r:s:")) != -1) {
@@ -51,6 +52,7 @@ int main(int argc, char * argv[]) {
     }
 
     printf ("i = %s, r = %s, s = %s\n", ival, rval, sval);
+
     for (index = optind; index < argc; index++) {
         bpf = argv[index];
         if(index > optind) {
@@ -60,28 +62,42 @@ int main(int argc, char * argv[]) {
         //printf ("Non-option argument %s\n", argv[index]);
     }
 
-    if(ival == NULL) {
-        ival = pcap_lookupdev(errbuf);
-        if(ival == NULL) {
-            fprintf(stderr, "Couldn't find default device: %s\n", errbuf);
+    if(rval != NULL) {
+        pcap_file = fopen(rval, "r");
+        if(pcap_file == NULL) {
+            perror(NULL);
+            exit(EXIT_FAILURE);
+        }
+        handle = pcap_fopen_offline(pcap_file, errbuf);
+        if (handle == NULL) {
+            fprintf(stderr, "Could not open pcap file: %s\n", errbuf);
             return(2);
-        } else {
-            printf("sniffing on: %s\n", ival);
+        }
+    } else {
+
+
+        if(ival == NULL) {
+            ival = pcap_lookupdev(errbuf);
+            if(ival == NULL) {
+                fprintf(stderr, "Couldn't find default device: %s\n", errbuf);
+                return(2);
+            } else {
+                printf("sniffing on: %s\n", ival);
+            }
+
         }
 
-    }
+        if (pcap_lookupnet(ival, &net, &mask, errbuf) == -1) {
+            fprintf(stderr, "Couldn't get netmask for device %s: %s\n", ival, errbuf);
+            net = 0;
+            mask = 0;
+        }
 
-    if (pcap_lookupnet(ival, &net, &mask, errbuf) == -1) {
-        fprintf(stderr, "Couldn't get netmask for device %s: %s\n", ival, errbuf);
-        net = 0;
-        mask = 0;
-    }
-
-    handle = pcap_open_live(ival, BUFSIZ, 1, 1000, errbuf);
-
-    if (handle == NULL) {
-        fprintf(stderr, "Couldn't find default device: %s\n", errbuf);
-        return(2);
+        handle = pcap_open_live(ival, BUFSIZ, 1, 1000, errbuf);
+        if (handle == NULL) {
+            fprintf(stderr, "Couldn't find default device: %s\n", errbuf);
+            return(2);
+        }
     }
 
     if(bpf != NULL) {
@@ -119,25 +135,25 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
     if(eth_type != ETHERTYPE_IP) {
         return;
     }
-    
+
     print_time(header->ts);
 
     printf("%02X:%02X:%02X:%02X:%02X:%02X",
-        (unsigned char) eth_hdr->ether_shost[0],
-        (unsigned char) eth_hdr->ether_shost[1],
-        (unsigned char) eth_hdr->ether_shost[2],
-        (unsigned char) eth_hdr->ether_shost[3],
-        (unsigned char) eth_hdr->ether_shost[4],
-        (unsigned char) eth_hdr->ether_shost[5]);
+            (unsigned char) eth_hdr->ether_shost[0],
+            (unsigned char) eth_hdr->ether_shost[1],
+            (unsigned char) eth_hdr->ether_shost[2],
+            (unsigned char) eth_hdr->ether_shost[3],
+            (unsigned char) eth_hdr->ether_shost[4],
+            (unsigned char) eth_hdr->ether_shost[5]);
     printf(" -> %02X:%02X:%02X:%02X:%02X:%02X type 0x%04X len %d\n",
-        (unsigned char) eth_hdr->ether_dhost[0],
-        (unsigned char) eth_hdr->ether_dhost[1],
-        (unsigned char) eth_hdr->ether_dhost[2],
-        (unsigned char) eth_hdr->ether_dhost[3],
-        (unsigned char) eth_hdr->ether_dhost[4],
-        (unsigned char) eth_hdr->ether_dhost[5],
-        eth_type,
-        header->len);
+            (unsigned char) eth_hdr->ether_dhost[0],
+            (unsigned char) eth_hdr->ether_dhost[1],
+            (unsigned char) eth_hdr->ether_dhost[2],
+            (unsigned char) eth_hdr->ether_dhost[3],
+            (unsigned char) eth_hdr->ether_dhost[4],
+            (unsigned char) eth_hdr->ether_dhost[5],
+            eth_type,
+            header->len);
 
     /* Print IP stuff */
     char *ip_src = malloc(sizeof(char) * BUFF_SIZE);
@@ -160,7 +176,7 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
     strncpy(ip_dst, tmp_dst, 15);
     tmp_dst = ip_dst + strlen(ip_dst);
 
-   /*TODO: read file and time and data*/ 
+    /*TODO: read file and time and data*/ 
 
     switch(ip_hdr->protocol) {
         case IPPROTO_TCP:
