@@ -113,7 +113,7 @@ int main(int argc, char * argv[]) {
     }
 
     signal(SIGINT, int_handler);
-    rtn = pcap_loop(handle, -1, got_packet, NULL);
+    rtn = pcap_loop(handle, -1, got_packet, (u_char*)sval);
     if(rtn == -1) {
         fprintf(stderr, "%s\n", pcap_geterr(handle));
         return EXIT_FAILURE;
@@ -136,25 +136,6 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
         return;
     }
 
-    print_time(header->ts);
-
-    printf("%02X:%02X:%02X:%02X:%02X:%02X",
-            (unsigned char) eth_hdr->ether_shost[0],
-            (unsigned char) eth_hdr->ether_shost[1],
-            (unsigned char) eth_hdr->ether_shost[2],
-            (unsigned char) eth_hdr->ether_shost[3],
-            (unsigned char) eth_hdr->ether_shost[4],
-            (unsigned char) eth_hdr->ether_shost[5]);
-    printf(" -> %02X:%02X:%02X:%02X:%02X:%02X type 0x%04X len %d\n",
-            (unsigned char) eth_hdr->ether_dhost[0],
-            (unsigned char) eth_hdr->ether_dhost[1],
-            (unsigned char) eth_hdr->ether_dhost[2],
-            (unsigned char) eth_hdr->ether_dhost[3],
-            (unsigned char) eth_hdr->ether_dhost[4],
-            (unsigned char) eth_hdr->ether_dhost[5],
-            eth_type,
-            header->len);
-
     /* Print IP stuff */
     char *ip_src = malloc(sizeof(char) * BUFF_SIZE);
     char *ip_dst = malloc(sizeof(char) * BUFF_SIZE);
@@ -175,8 +156,6 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
     tmp_dst = inet_ntoa(*(struct in_addr*)&ip_hdr->daddr);
     strncpy(ip_dst, tmp_dst, 15);
     tmp_dst = ip_dst + strlen(ip_dst);
-
-    /*TODO: read file and time and data*/ 
 
     switch(ip_hdr->protocol) {
         case IPPROTO_TCP:
@@ -205,6 +184,31 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
             data = (u_char *) (ip_hdr + 1);
             break;
     }
+
+    if(args != NULL) {
+        if(NULL == strstr((const char*)data, (const char *)args)) {
+            return;
+        }
+    }
+    
+    print_time(header->ts);
+    printf("%02X:%02X:%02X:%02X:%02X:%02X",
+            (unsigned char) eth_hdr->ether_shost[0],
+            (unsigned char) eth_hdr->ether_shost[1],
+            (unsigned char) eth_hdr->ether_shost[2],
+            (unsigned char) eth_hdr->ether_shost[3],
+            (unsigned char) eth_hdr->ether_shost[4],
+            (unsigned char) eth_hdr->ether_shost[5]);
+    printf(" -> %02X:%02X:%02X:%02X:%02X:%02X type 0x%04X len %d\n",
+            (unsigned char) eth_hdr->ether_dhost[0],
+            (unsigned char) eth_hdr->ether_dhost[1],
+            (unsigned char) eth_hdr->ether_dhost[2],
+            (unsigned char) eth_hdr->ether_dhost[3],
+            (unsigned char) eth_hdr->ether_dhost[4],
+            (unsigned char) eth_hdr->ether_dhost[5],
+            eth_type,
+            header->len);
+
 
     printf("%s -> %s %s\n", ip_src, ip_dst, type_name);
 
